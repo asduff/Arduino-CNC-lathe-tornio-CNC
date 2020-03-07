@@ -1,6 +1,6 @@
 # Arduino-CNC-lathe-tornio-CNC
 
-Make every screw thread without using pc.
+Make every screw thread without using a pc.
 
 libraries:
 
