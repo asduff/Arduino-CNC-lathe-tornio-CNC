@@ -3,14 +3,14 @@
  * @author Igor Nociaro
  * @version 1.0
  */
-float velocita = 3100.0;
-float accelerazione = 2600.0;
+float velocita = 2500.0;
+float accelerazione = 3200.0;
 char c;
 float gradiassoluti = 0;
 
-float motrice1 = 14.0; //motore 1
+float motrice1 = 15.0; //motore 1
 float motrice2 = 18.0; //motore 2
-float condotta1 = 48.0;
+float condotta1 = 60.0;
 float condotta2 = 60.0;
 float riduzione1 = 3.0; //slitta lineare
 float riduzione2 = 90.0; 
@@ -21,8 +21,8 @@ float riduzione2 = 90.0;
 float passimm = passigiro*(condotta1/motrice1)*(1/riduzione1); //passi per mm motore1
 float passiridotti = passigiro2*(condotta2/motrice2)*riduzione2; //passi per giro motore2
 
-float passiinch = passimm*25.4; //pollice
-float passithou = passimm*0.0254;//millesimo di pollice
+//float passiinch = passimm*25.4; //pollice
+//float passithou = passimm*0.0254;//millesimo di pollice
 /////////////////////////////////////////////////////////////////dichiarazione DISPLAY
 #include <LiquidCrystal.h>
 LiquidCrystal lcd(7, 6, 5, 4, 3, 2);
@@ -246,6 +246,7 @@ float inserisciD(){
 }
 ///////////////////////////////////////////////////////////////////////////////////////////modalità
 void modA(){
+  short int cont = 0;
   float gradirelativi=0; //togliere se si vuole la posizione assoluta
   lcd.clear();
   lcd.setCursor(0,1);
@@ -264,17 +265,23 @@ void modA(){
       lcd.print(gradirelativi);
       lcd.setCursor(10,1);
       lcd.write(byte(0));
+      lcd.setCursor(15,0);
+      lcd.print("n:");
+      lcd.setCursor(17,0);
+      lcd.print(cont);
       //scelta
       c = tastiera.waitForKey();
       if(c == 'A'){
         gradirelativi = gradirelativi+gradi;
         gradiassoluti = gradiassoluti+gradi;
+        cont++;
         stepper1.move(passimm*gradi/360.0); 
         stepper2.move(passiridotti*gradi/360.0);
       }
       if(c == 'B') {
         gradirelativi = gradirelativi-gradi; 
         gradiassoluti = gradiassoluti-gradi;
+        cont--;
         stepper1.move(-passimm*gradi/360.0);
         stepper2.move(-passiridotti*gradi/360.0);//moveTo per posizione assoluta
       }
@@ -412,8 +419,8 @@ void modD(){
             default:
               break;
           }//switch 2o livello
-          passiinch = passimm*25.4; //pollice
-          passithou = passimm*0.0254;//millesimo di pollice
+       //   passiinch = passimm*25.4; //pollice
+         // passithou = passimm*0.0254;//millesimo di pollice
           }
           c = 'E';
           break;
@@ -465,12 +472,12 @@ void modA2(){
       temp = "mm";
       break;
     case 'B':
-      unitamisura = passiinch;
-      temp = "inch";
+      //unitamisura = passiinch;
+      unitamisura = passimm;
+      temp = "TPI";
       break;
     case 'C':
-      unitamisura = passithou;
-      temp = "thou";
+      return;
       break;
     case 'D':
       return;
@@ -483,33 +490,36 @@ void modA2(){
   
   float lunghezza = inserisciLEN();
   if(lunghezza == 0) return;
-  if(c == 'B') lunghezza = lunghezza/25.4;
-  if(c == 'C') lunghezza = lunghezza/0.0254;
+  //if(c == 'B') lunghezza = lunghezza/25.4;
+  //if(c == 'C') lunghezza = lunghezza/0.0254;
   float passo = inserisciPAS(temp);
   if(passo == 0) return;
+  if(temp == "TPI"){
+    passo = 25.40000 / passo ; //thread per inch
+  }
   float tacc = ((2.0*velocita)/accelerazione) ; //tempo accelerazione e decelerazione mot2
   float tmot = ((passiridotti) -((sq(velocita))/accelerazione))/velocita ; //tempo in moto uniforme 1 giro/mm
   float tmot2 = (lunghezza*tmot)/passo ; //tempo in moto uniforme mot2 con lunghezza e passo
   float velocita2 = (unitamisura*passo)/(tacc+tmot);
   bool isteresi = true;
-  bool dxsx; //vite destra o sinistra
+  bool dxsx;
   destrasinistra();
   c = tastiera.waitForKey(); 
   if(c == 'A'){
     dxsx = true;
   do{
-    menufiletto(lunghezza,passo,tacc+tmot2,temp,destrasinistra);
+    menufiletto(lunghezza,passo,tacc+tmot2,temp,dxsx);
     c = tastiera.waitForKey();
     if((c == 'A') && isteresi){
       isteresi = !isteresi;
       stepper1.move(unitamisura*lunghezza);
-      stepper2.move((passiridotti*lunghezza)/passo);   
+      stepper2.move(-(passiridotti*lunghezza)/passo);   
       stepper1.setSpeed(velocita2);//move potrebbe cambiare la velocità
     }
     if((c == 'B') && !isteresi){
       isteresi = !isteresi; 
       stepper1.move(-unitamisura*lunghezza);
-      stepper2.move(-(passiridotti*lunghezza)/passo);
+      stepper2.move((passiridotti*lunghezza)/passo);
       stepper1.setSpeed(velocita2);//move potrebbe cambiare la velocità
 
     }
@@ -522,19 +532,19 @@ void modA2(){
   if(c == 'B'){
     dxsx = false;
     do{
-    menufiletto(lunghezza,passo,tacc+tmot2,temp,destrasinistra);
+    menufiletto(lunghezza,passo,tacc+tmot2,temp,dxsx);
     c = tastiera.waitForKey();
     if((c == 'A') && !isteresi){
       isteresi = !isteresi;
       stepper1.move(unitamisura*lunghezza);
-      stepper2.move(-(passiridotti*lunghezza)/passo);   
+      stepper2.move((passiridotti*lunghezza)/passo);   
       stepper1.setSpeed(velocita2);//move potrebbe cambiare la velocità
       
     }
     if((c == 'B') && isteresi){
       isteresi = !isteresi; 
       stepper1.move(-unitamisura*lunghezza);
-      stepper2.move((passiridotti*lunghezza)/passo);
+      stepper2.move(-(passiridotti*lunghezza)/passo);
       stepper1.setSpeed(velocita2);//move potrebbe cambiare la velocità
     }
     while(!((stepper1.distanceToGo()==0)&&(stepper2.distanceToGo()==0))){
@@ -831,9 +841,9 @@ void menucambioriduzione(float p1,float p2,float p3){
   lcd.setCursor(0,0);
   lcd.print("A:mm");
   lcd.setCursor(0,1);
-  lcd.print("B:inch");
+  lcd.print("B:TPI");
   lcd.setCursor(0,2);
-  lcd.print("C:thou");
+  lcd.print("C:");
   lcd.setCursor(0,3);
   lcd.print("D: <-");
  }
@@ -846,7 +856,7 @@ void menucambioriduzione(float p1,float p2,float p3){
   lcd.setCursor(0,1);
   lcd.print("passo:");
   lcd.setCursor(7,1);
-  lcd.print(passo);
+  lcd.print(passo,3);
   lcd.setCursor(13,1);
   lcd.print(unitamisura);
   lcd.setCursor(0,2);
@@ -862,7 +872,7 @@ void menucambioriduzione(float p1,float p2,float p3){
   lcd.setCursor(17,2);
   lcd.print("C:X");
   lcd.setCursor(0,3);
-  lcd.print("A:avanti  B:indietro"); //se sta già avanti non puoi premerlo nuovamente
+  lcd.print("A:indietro  B:avanti"); //se sta già avanti non puoi premerlo nuovamente
  }
  void menusolomot1(float lunghezza,float velocita){
   lcd.clear();
