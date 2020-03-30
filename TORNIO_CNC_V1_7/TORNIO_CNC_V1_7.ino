@@ -3,7 +3,7 @@
  * @author Igor Nociaro
  * @version 1.0
  */
-float velocita = 2500.0;
+float velocita = 3000.0;
 float accelerazione = 3200.0;
 char c;
 float gradiassoluti = 0;
@@ -11,12 +11,12 @@ float gradiassoluti = 0;
 float motrice1 = 15.0; //motore 1
 float motrice2 = 18.0; //motore 2
 float condotta1 = 60.0;
-float condotta2 = 60.0;
+float condotta2 = 56.0;
 float riduzione1 = 3.0; //slitta lineare
-float riduzione2 = 90.0; 
+float riduzione2 = 7.0; 
 //////////////////////////////
 #define passigiro 3200.0 //reali del motore1 con 1/16(200*16)
-#define passigiro2 400.0 //motore2 con 1/2
+#define passigiro2 1600.0 //motore2 con 1/2
 
 float passimm = passigiro*(condotta1/motrice1)*(1/riduzione1); //passi per mm motore1
 float passiridotti = passigiro2*(condotta2/motrice2)*riduzione2; //passi per giro motore2
@@ -376,7 +376,9 @@ void modC(){
       }
 }
 void modD(){
-  //Serial.println("all'interno di mod D");
+  /*ritorno al menù principale -> '#'
+  *                   indietro -> 'D'
+  */
   do{
   impostazioni();
   c = tastiera.waitForKey();
@@ -393,12 +395,12 @@ void modD(){
        break;
     case 'C':
        // modC2();
-       while(c != 'D'){
+       do{
        menumotori();
        c = tastiera.waitForKey();
        switch(c){
         case 'A':
-          while(c != 'D'){
+          do{
           menucambioriduzione(motrice1,condotta1,riduzione1);
           lcd.setCursor(12,3);
           lcd.print("mm/giro");
@@ -418,14 +420,14 @@ void modD(){
               break;
             default:
               break;
-          }//switch 2o livello
-       //   passiinch = passimm*25.4; //pollice
-         // passithou = passimm*0.0254;//millesimo di pollice
           }
-          c = 'E';
-          break;
+          
+          }while((c != 'D')&&(c != '#'));
+          if(c != '#') //ritorno al menu principale
+            c = 'E'; //prevenzione ritorno menu principale,qualsiasi lettera che non sia abcd
+          break;  //fine caso 'A' switch 1
         case 'B':
-          while(c != 'D'){
+          do{
           menucambioriduzione(motrice2,condotta2,riduzione2);
           c = tastiera.waitForKey();
           switch(c){
@@ -443,113 +445,139 @@ void modD(){
               break;
             default:
               break;
-          } //switch 2o livello
-          }
-          c = 'E'; //prevenzione ritorno menu principale,qualsiasi lettera che non sia abcd
-          break;
+          } //switch 3o livello
+          }while((c != 'D')&&(c != '#'));
+          if(c != '#')
+            c = 'E'; //prevenzione ritorno menu principale,qualsiasi lettera che non sia abcd
+          break; //fine caso 'B' switch 1
         default:
           break;
-       }//switch 1o livello
-       }//while chiuso
-       c = 'E';
+       }//switch 2o livello
+       }while((c != 'D')&&(c != '#'));//while all'interno di caso 'C'
+       if(c != '#')
+        c = 'E';
        break;
     default:
     //fai una scelta
        break;
-  }
-  }while(c != 'D'); //aggiungere lettere per altre impostazioni
+  }//fine switch 1
+  }while((c != 'D')&&(c != '#')); //aggiungere lettere per altre impostazioni
 }
 void modA2(){
   //la velocità di stepper 1 dipende da stepper 2
   float unitamisura; //unità di misura utilizzata
   String temp = "";
-  
+  unitamisura = passimm;//da aggiustare
   menuunitamisura();
   c = tastiera.waitForKey();
   switch(c){
     case 'A':
-      unitamisura = passimm;
+     // unitamisura = passimm;
       temp = "mm";
       break;
     case 'B':
       //unitamisura = passiinch;
-      unitamisura = passimm;
+      //unitamisura = passimm;
       temp = "TPI";
       break;
-    case 'C':
-      return;
-      break;
-    case 'D':
-      return;
-      break;
     default :
-      unitamisura = passimm;
+      //unitamisura = passimm;
       temp = "mm";
       break;
   }
   
   float lunghezza = inserisciLEN();
   if(lunghezza == 0) return;
-  //if(c == 'B') lunghezza = lunghezza/25.4;
-  //if(c == 'C') lunghezza = lunghezza/0.0254;
   float passo = inserisciPAS(temp);
   if(passo == 0) return;
   if(temp == "TPI"){
     passo = 25.40000 / passo ; //thread per inch
   }
+  /*
   float tacc = ((2.0*velocita)/accelerazione) ; //tempo accelerazione e decelerazione mot2
   float tmot = ((passiridotti) -((sq(velocita))/accelerazione))/velocita ; //tempo in moto uniforme 1 giro/mm
   float tmot2 = (lunghezza*tmot)/passo ; //tempo in moto uniforme mot2 con lunghezza e passo
   float velocita2 = (unitamisura*passo)/(tacc+tmot);
+  */
+  float numpassi = (passiridotti*lunghezza)/passo; //numero di passi per compiere un giro, cast implicito float->int
+  float t = numpassi / velocita;
+  float velocita2 = (unitamisura*lunghezza)/t;
+  float mv = 3.0; //moltiplicatore velocità per ritorno veloce
+ // int numpassi = (passiridotti*lunghezza)/passo; //numero di passi per compiere un giro, cast implicito float->int
   bool isteresi = true;
   bool dxsx;
   destrasinistra();
   c = tastiera.waitForKey(); 
-  if(c == 'A'){
+  if(c == 'A'){  //vite destra
     dxsx = true;
   do{
-    menufiletto(lunghezza,passo,tacc+tmot2,temp,dxsx);
+    menufiletto(lunghezza,passo,t,temp,dxsx);
     c = tastiera.waitForKey();
     if((c == 'A') && isteresi){
       isteresi = !isteresi;
       stepper1.move(unitamisura*lunghezza);
-      stepper2.move(-(passiridotti*lunghezza)/passo);   
+      //stepper2.move(-(passiridotti*lunghezza)/passo); 
+      stepper2.move(-numpassi);    
       stepper1.setSpeed(velocita2);//move potrebbe cambiare la velocità
+      stepper2.setSpeed(velocita); //anche mot2 non ha accelerazioni ora
+      
+      while(!((stepper1.distanceToGo()==0)&&(stepper2.distanceToGo()==0))){
+        stepper1.runSpeedToPosition();
+        stepper2.runSpeedToPosition();       
+      }
     }
-    if((c == 'B') && !isteresi){
+    if((c == 'B') && !isteresi){     //indietro veloce
       isteresi = !isteresi; 
+      float divisore = ((passiridotti*lunghezza)/passo)/passiridotti;
+      float passizero = ((passiridotti*lunghezza)/passo)-(passiridotti*(int)divisore);
+      if(passizero <= passiridotti/2.0){ //se ha superato metà giro
+        stepper2.move(passizero);
+      }else{
+        stepper2.move(passizero-passiridotti);  //-(passiridotti-passizero)
+      }
       stepper1.move(-unitamisura*lunghezza);
-      stepper2.move((passiridotti*lunghezza)/passo);
-      stepper1.setSpeed(velocita2);//move potrebbe cambiare la velocità
+      stepper1.setSpeed(velocita*mv*2);
+      stepper2.setSpeed(velocita*mv); 
+      while(!((stepper1.distanceToGo()==0)&&(stepper2.distanceToGo()==0))){
+        stepper1.runSpeedToPosition();
+        stepper2.runSpeedToPosition(); 
+      }                                  
 
     }
-    while(!((stepper1.distanceToGo()==0)&&(stepper2.distanceToGo()==0))){
-        stepper1.runSpeedToPosition();
-        stepper2.run();
-      }
   }while(c != 'C');
   }
-  if(c == 'B'){
+  if(c == 'B'){    //vite sinistra
     dxsx = false;
     do{
-    menufiletto(lunghezza,passo,tacc+tmot2,temp,dxsx);
+    menufiletto(lunghezza,passo,t,temp,dxsx);
     c = tastiera.waitForKey();
-    if((c == 'A') && !isteresi){
+    if((c == 'A') && !isteresi){   //avanti veloce
       isteresi = !isteresi;
+      float divisore = ((passiridotti*lunghezza)/passo)/passiridotti;
+      float passizero = ((passiridotti*lunghezza)/passo)-(passiridotti*(int)divisore);
+      Serial.print("passizero: ");
+      Serial.println(passizero); 
+      if(passizero <= passiridotti/2.0){ //se ha superato metà giro
+        stepper2.move(passizero);
+      }else{
+        stepper2.move(passizero-passiridotti);  //-(passiridotti-passizero)
+      }
       stepper1.move(unitamisura*lunghezza);
-      stepper2.move((passiridotti*lunghezza)/passo);   
-      stepper1.setSpeed(velocita2);//move potrebbe cambiare la velocità
+      stepper1.setSpeed(velocita*mv*2);
+      stepper2.setSpeed(velocita*mv); 
       
     }
     if((c == 'B') && isteresi){
       isteresi = !isteresi; 
+
       stepper1.move(-unitamisura*lunghezza);
-      stepper2.move(-(passiridotti*lunghezza)/passo);
+      stepper2.move(-numpassi);    
       stepper1.setSpeed(velocita2);//move potrebbe cambiare la velocità
+      stepper2.setSpeed(velocita); //anche mot2 non ha accelerazioni ora
     }
     while(!((stepper1.distanceToGo()==0)&&(stepper2.distanceToGo()==0))){
         stepper1.runSpeedToPosition();
-        stepper2.run();
+        stepper2.runSpeedToPosition();
       }
   }while(c != 'C');
   }
@@ -848,6 +876,8 @@ void menucambioriduzione(float p1,float p2,float p3){
   lcd.print("D: <-");
  }
  void menufiletto(float lunghezza,float passo,float tempo,String unitamisura,bool dxsx){
+  int minuti = tempo/60.0;
+  int secondi = (int)tempo%60;
   lcd.clear();
   lcd.setCursor(0,0);
   lcd.print("lunghezza:       mm");
@@ -860,9 +890,15 @@ void menucambioriduzione(float p1,float p2,float p3){
   lcd.setCursor(13,1);
   lcd.print(unitamisura);
   lcd.setCursor(0,2);
-  lcd.print("tempo:       s");
+  lcd.print("tempo:");
   lcd.setCursor(7,2);
-  lcd.print(tempo);
+  lcd.print(minuti);
+  lcd.setCursor(9,2);
+  lcd.print(":");
+  lcd.setCursor(10,2);
+  lcd.print(secondi);
+  lcd.setCursor(13,2);
+  lcd.print("m");
   lcd.setCursor(18,1);
   if(dxsx){  
   lcd.print("DX");
