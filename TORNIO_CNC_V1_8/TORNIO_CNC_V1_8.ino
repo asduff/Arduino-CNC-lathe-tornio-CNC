@@ -1,9 +1,10 @@
 /**
  * Arduino CNC lathe/tornio CNC
  * @author Igor Nociaro
- * @version 1.0
- */
-float velocita = 3000.0;
+ * @version 1.8
+ * -aggiunta di affilatura orizzontale e minor bug fix
+ */ 
+float velocita = 1500.0;
 float accelerazione = 3200.0;
 char c;
 float gradiassoluti = 0;
@@ -11,12 +12,12 @@ float gradiassoluti = 0;
 float motrice1 = 15.0; //motore 1
 float motrice2 = 18.0; //motore 2
 float condotta1 = 60.0;
-float condotta2 = 56.0;
+float condotta2 = 60.0;
 float riduzione1 = 3.0; //slitta lineare
-float riduzione2 = 7.0; 
+float riduzione2 = 1.0; 
 //////////////////////////////
 #define passigiro 3200.0 //reali del motore1 con 1/16(200*16)
-#define passigiro2 1600.0 //motore2 con 1/2
+#define passigiro2 1600.0 //motore2 con 1/8
 
 float passimm = passigiro*(condotta1/motrice1)*(1/riduzione1); //passi per mm motore1
 float passiridotti = passigiro2*(condotta2/motrice2)*riduzione2; //passi per giro motore2
@@ -89,7 +90,7 @@ void modB();
 void modC();
 void modA2();
 void modB2();
-//void modC2();
+void modC2();
 void modD();
 ///////////////////////////////////////////////////////////////////////////////////////////setup
 void setup() {
@@ -138,7 +139,7 @@ void loop() {
        modB2();
        break;
     case 'C':
-      // modC2();
+       modC2();
        break;
     case 'D':
        modD();
@@ -177,7 +178,7 @@ float inserisciACC(){
 float inserisciLEN(){
   lcd.clear();
   lcd.setCursor(0,1);
-  lcd.print("lunghezza filetto:");
+  lcd.print("lunghezza :");
   lcd.setCursor(12,2);
   lcd.print("mm");
   lcd.setCursor(0,3);
@@ -208,7 +209,6 @@ float inseriscidenti(){
   if(var == 0) return 0; //ritorna al menu
   return var;
 }
-
 float inserisciriduzione(){
   lcd.clear();
   lcd.setCursor(0,0);
@@ -221,7 +221,6 @@ float inserisciriduzione(){
   if(var == 0) return 0; //ritorna al menu
   return var;
 }
-
 float inserisciVEL(){
   lcd.clear();
   lcd.setCursor(0,1);
@@ -244,6 +243,39 @@ float inserisciD(){
   if(var == 0) return 0; //ritorna al menu
   return var;
 }
+int inserisciFlauti(){
+  lcd.clear();
+  lcd.setCursor(0,1);
+  lcd.print("numero di taglienti:");
+  lcd.setCursor(0,3);
+  lcd.print("A: OK        D: <-");
+  float var = inseriscinumero();
+  if(var == 0) return 0; //ritorna al menu
+  return var;
+}
+float inserisciAngoloAffilatura(){  
+  lcd.clear();
+  lcd.setCursor(0,1);
+  lcd.print("angolo affilatura:");
+  lcd.setCursor(11,2);
+  lcd.write(byte(0));
+  lcd.setCursor(0,3);
+  lcd.print("A: OK        D: <-");
+  float var = inseriscinumero();
+  if(var == 0) return 0; //ritorna al menu
+  return var;
+}
+float inserisciDiam(){
+  lcd.clear();
+  lcd.setCursor(0,1);
+  lcd.print("diametro utensile:");
+  lcd.setCursor(0,3);
+  lcd.print("A: OK        D: <-");
+  float var = inseriscinumero();
+  if(var == 0) return 0; //ritorna al menu
+  return var;
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////modalità
 void modA(){
   short int cont = 0;
@@ -343,7 +375,6 @@ void modB(){
     
   }
 }
-
 void modC(){
   menurotcontinua();
   c = tastiera.waitForKey();
@@ -493,15 +524,11 @@ void modA2(){
   if(temp == "TPI"){
     passo = 25.40000 / passo ; //thread per inch
   }
-  /*
-  float tacc = ((2.0*velocita)/accelerazione) ; //tempo accelerazione e decelerazione mot2
-  float tmot = ((passiridotti) -((sq(velocita))/accelerazione))/velocita ; //tempo in moto uniforme 1 giro/mm
-  float tmot2 = (lunghezza*tmot)/passo ; //tempo in moto uniforme mot2 con lunghezza e passo
-  float velocita2 = (unitamisura*passo)/(tacc+tmot);
-  */
   float numpassi = (passiridotti*lunghezza)/passo; //numero di passi per compiere un giro, cast implicito float->int
-  float t = numpassi / velocita;
-  float velocita2 = (unitamisura*lunghezza)/t;
+  //float t = numpassi / velocita;
+  //float velocita2 = (unitamisura*lunghezza)/t;
+  float t = (unitamisura*lunghezza)/ velocita;
+  float velocita2 = numpassi / t;
   float mv = 3.0; //moltiplicatore velocità per ritorno veloce
  // int numpassi = (passiridotti*lunghezza)/passo; //numero di passi per compiere un giro, cast implicito float->int
   bool isteresi = true;
@@ -517,9 +544,9 @@ void modA2(){
       isteresi = !isteresi;
       stepper1.move(unitamisura*lunghezza);
       //stepper2.move(-(passiridotti*lunghezza)/passo); 
-      stepper2.move(-numpassi);    
-      stepper1.setSpeed(velocita2);//move potrebbe cambiare la velocità
-      stepper2.setSpeed(velocita); //anche mot2 non ha accelerazioni ora
+      stepper2.move(numpassi);    
+      stepper1.setSpeed(velocita);//move potrebbe cambiare la velocità
+      stepper2.setSpeed(velocita2); //anche mot2 non ha accelerazioni ora
       
       while(!((stepper1.distanceToGo()==0)&&(stepper2.distanceToGo()==0))){
         stepper1.runSpeedToPosition();
@@ -531,12 +558,12 @@ void modA2(){
       float divisore = ((passiridotti*lunghezza)/passo)/passiridotti;
       float passizero = ((passiridotti*lunghezza)/passo)-(passiridotti*(int)divisore);
       if(passizero <= passiridotti/2.0){ //se ha superato metà giro
-        stepper2.move(passizero);
+        stepper2.move(-passizero);
       }else{
-        stepper2.move(passizero-passiridotti);  //-(passiridotti-passizero)
+        stepper2.move(-(passizero-passiridotti));  //-(passiridotti-passizero)
       }
       stepper1.move(-unitamisura*lunghezza);
-      stepper1.setSpeed(velocita*mv*2);
+      stepper1.setSpeed(velocita*mv*4);
       stepper2.setSpeed(velocita*mv); 
       while(!((stepper1.distanceToGo()==0)&&(stepper2.distanceToGo()==0))){
         stepper1.runSpeedToPosition();
@@ -555,15 +582,14 @@ void modA2(){
       isteresi = !isteresi;
       float divisore = ((passiridotti*lunghezza)/passo)/passiridotti;
       float passizero = ((passiridotti*lunghezza)/passo)-(passiridotti*(int)divisore);
-      Serial.print("passizero: ");
-      Serial.println(passizero); 
+      
       if(passizero <= passiridotti/2.0){ //se ha superato metà giro
-        stepper2.move(passizero);
+        stepper2.move(-passizero);
       }else{
-        stepper2.move(passizero-passiridotti);  //-(passiridotti-passizero)
+        stepper2.move(-(passizero-passiridotti));  
       }
       stepper1.move(unitamisura*lunghezza);
-      stepper1.setSpeed(velocita*mv*2);
+      stepper1.setSpeed(velocita*mv*4);
       stepper2.setSpeed(velocita*mv); 
       
     }
@@ -571,9 +597,9 @@ void modA2(){
       isteresi = !isteresi; 
 
       stepper1.move(-unitamisura*lunghezza);
-      stepper2.move(-numpassi);    
-      stepper1.setSpeed(velocita2);//move potrebbe cambiare la velocità
-      stepper2.setSpeed(velocita); //anche mot2 non ha accelerazioni ora
+      stepper2.move(numpassi);    
+      stepper1.setSpeed(velocita);//move potrebbe cambiare la velocità
+      stepper2.setSpeed(velocita2); //anche mot2 non ha accelerazioni ora
     }
     while(!((stepper1.distanceToGo()==0)&&(stepper2.distanceToGo()==0))){
         stepper1.runSpeedToPosition();
@@ -588,19 +614,19 @@ void modB2(){
   float vel = inserisciVEL();
   if(vel == 0) return;
   stepper1.setMaxSpeed(vel);
- // bool isteresi = true;
+ 
   do{
     menusolomot1(lunghezza,vel);
     c = tastiera.waitForKey();
     if(c == 'A'){
-     // isteresi = !isteresi;
+ 
       stepper1.move(passimm*lunghezza);
       while(stepper1.distanceToGo()!=0){
         stepper1.run();
       }
     }
     if(c == 'B'){
-     // isteresi = !isteresi; 
+ 
       stepper1.move(-passimm*lunghezza);
       while(stepper1.distanceToGo()!=0){
         stepper1.run();
@@ -608,6 +634,93 @@ void modB2(){
     }
   }while(c != 'C');
   stepper1.setMaxSpeed(velocita);
+}
+void modC2(){  //affilatura orizzontale-rettifica
+  int pos = 1; //posizione fresa su tagliente
+  bool isteresi = true;
+  float lunghezza = inserisciLEN();
+  if(lunghezza == 0) return;
+  float diametro = inserisciDiam();
+  if(diametro == 0) return;
+  float alpha = inserisciAngoloAffilatura();
+  if((alpha == 0)||(alpha > 60)) return;
+  int flauti = inserisciFlauti();
+  if((flauti == 0)||(flauti > 8)) return;
+  
+/*  Serial.print("lunghezza: ");
+  Serial.println(lunghezza);
+  Serial.print("alpha: ");
+  Serial.println(alpha);
+  Serial.print("tanalpha: ");
+  Serial.println(tan(alpha));*/
+  float rad = (alpha * 71) / 4068; //conversione gradi->radianti
+/*  Serial.print("rad: ");
+  Serial.println(rad);*/
+  float len2 = lunghezza*tan(rad); //tan vuole radianti come angolo
+ /* Serial.print("arco: ");
+  Serial.println(len2);*/
+  float beta = (360.0*len2)/(PI*diametro); //angolo di rotazione tornio
+ /* Serial.print("angolo: ");
+  Serial.println(beta);*/
+  float numpassi = (passiridotti*beta)/360.0; //numero di passi per fare un determinato angolo
+ /* Serial.print("numpassi angolo: ");
+  Serial.println(numpassi);*/
+
+  //float t = numpassi / velocita;
+  //float velocita2 = (lunghezza*passimm)/t;
+
+  float t = (lunghezza*passimm)/ velocita;
+  float velocita2 = numpassi/t;
+ 
+  /*Serial.print("numpassi prossimo tagliente: ");
+  Serial.println( passiridotti*(360.0/flauti)/360.0);
+  Serial.print("t: ");
+  Serial.println(t);*/
+  
+  do{
+   // int pos = flauti; //provv posizione n flauto
+    menurettifica(lunghezza,alpha,t,pos);
+    c = tastiera.waitForKey();
+    if (c == 'A'){
+      //prima dalla base verso la punta poi riprendi la posizione
+      if(isteresi){
+        isteresi = !isteresi;
+        //
+        stepper1.move(-passimm*lunghezza);
+        stepper2.move(-numpassi);    
+        stepper1.setSpeed(velocita);//move potrebbe cambiare la velocità
+        stepper2.setSpeed(velocita2); //anche mot2 non ha accelerazioni ora
+        
+        while(!((stepper1.distanceToGo()==0)&&(stepper2.distanceToGo()==0))){
+        stepper1.runSpeedToPosition();
+        stepper2.runSpeedToPosition();       
+      }
+      }else{  //riprendi la posizione
+        isteresi = !isteresi;
+        //
+        stepper1.move(passimm*lunghezza);
+        stepper2.move(numpassi);    
+        stepper1.setSpeed(velocita);//move potrebbe cambiare la velocità
+        stepper2.setSpeed(velocita2); //anche mot2 non ha accelerazioni ora
+        
+        while(!((stepper1.distanceToGo()==0)&&(stepper2.distanceToGo()==0))){
+        stepper1.runSpeedToPosition();
+        stepper2.runSpeedToPosition();       
+      }
+      }
+    }
+    if (c == 'B'){
+      pos++;
+      if(pos > flauti) pos = 1;
+      
+      //motore tornio + 360°/flauti
+      stepper2.move(passiridotti*(360.0/flauti)/360.0);
+    
+      while(stepper2.distanceToGo()!=0){
+        stepper2.run();
+      }
+    }
+  }while(c != 'C');
 }
 /////////////////////////////////////////////////////////////////////////////funzioni numero
 int cifra(char ch){
@@ -789,7 +902,7 @@ void menu2(){
   lcd.setCursor(0,1);
   lcd.print("B:solo motore 1");
   lcd.setCursor(0,2);
-  lcd.print("C:");
+  lcd.print("C:rettifica");
   lcd.setCursor(0,3);
   lcd.print("D:impostazioni");
 }
@@ -908,7 +1021,40 @@ void menucambioriduzione(float p1,float p2,float p3){
   lcd.setCursor(17,2);
   lcd.print("C:X");
   lcd.setCursor(0,3);
-  lcd.print("A:indietro  B:avanti"); //se sta già avanti non puoi premerlo nuovamente
+  lcd.print("A:avanti  B:indietro"); //se sta già avanti non puoi premerlo nuovamente
+ }
+ void menurettifica(float lunghezza,float angolo,float tempo,int ntagliente){
+  int minuti = tempo/60.0;
+  int secondi = (int)tempo%60;
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("lunghezza:      n : ");
+  lcd.setCursor(17,0);
+  lcd.write(byte(0));
+  lcd.setCursor(11,0);
+  lcd.print(lunghezza);
+  lcd.setCursor(19,0);
+  lcd.print(ntagliente);
+  lcd.setCursor(0,1);
+  lcd.print("angolo:");
+  lcd.setCursor(8,1);
+  lcd.print(angolo);
+  lcd.setCursor(12,1);
+  lcd.write(byte(0));
+  lcd.setCursor(0,2);
+  lcd.print("tempo:");
+  lcd.setCursor(7,2);
+  lcd.print(minuti);
+  lcd.setCursor(9,2);
+  lcd.print(":");
+  lcd.setCursor(10,2);
+  lcd.print(secondi);
+  lcd.setCursor(13,2);
+  lcd.print("m");
+  lcd.setCursor(17,2);
+  lcd.print("C:X");
+  lcd.setCursor(0,3);
+  lcd.print("A:avanti  B:cambia ");
  }
  void menusolomot1(float lunghezza,float velocita){
   lcd.clear();
